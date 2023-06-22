@@ -5,6 +5,74 @@ date: "2023-06-15"
 output: github_document
 ---
 
+## Introduction
+
+This vignette show stock prices for publicly-traded life insurance companies for the past x days and compares them to the S&P 500.  
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
+The packages needed to run the code to create this vignette are the following:  
+
+
+- jsonlite
+- httr  
+- tidyverse
+
+In addition, I used the following packages to process the data and perform other tasks.
+
+
+
+```{r}
+
+library(httr)
+library(jsonlite)
+library(tidyverse)
+
+# Stocks  aggregate (bars) ticker 
+
+base<-'https://api.polygon.io/v2/aggs/ticker/'
+ticker<-'AAPL'
+range<-'/range/1/day/'
+dates<-'2023-01-09/2023-01-09'
+adjusted<-'?adjusted=true&sort=asc&limit=120'
+info_key<-'&apiKey=7FTp6uzAjKcWUI1BJEO7WppG3wyOZOy9'
+
+# Stocks grouped daily
+
+
+#foreign exchange aggregate bars
+
+https://api.polygon.io/v2/aggs/ticker/C:EURUSD/range/1/day/2023-01-09/2023-05-09?adjusted=true&sort=asc&limit=5000&apiKey=7FTp6uzAjKcWUI1BJEO7WppG3wyOZOy9
+
+
+#foreign exchange grouped daily
+
+date<-'2023-02-09?'
+base<-'https://api.polygon.io/v2/aggs/grouped/locale/global/market/fx/'
+adjusted<-'adjusted=true'
+info_key<-'&apiKey=7FTp6uzAjKcWUI1BJEO7WppG3wyOZOy9'
+API_URL<-paste0(base,date,adjusted, info_key)
+fx_info<-GET(API_URL)
+df_fx<-fromJSON(rawToChar(fx_info$content))
+
+
+#stocks Get Details on company
+
+ticker<-'GOOG'
+base<-'https://api.polygon.io/v3/reference/tickers/'
+info_key<-'?apiKey=7FTp6uzAjKcWUI1BJEO7WppG3wyOZOy9'
+API_URL<-paste0(base,ticker, info_key)
+ticker_info<-GET(API_URL)
+df_ticker<-fromJSON(rawToChar(ticker_info$content))
+
+
+
+
+
+
+
+```
+
+
