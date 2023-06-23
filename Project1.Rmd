@@ -7,7 +7,7 @@ output: github_document
 
 ## Introduction
 
-This vignette show stock prices for publicly-traded life insurance companies for the past x days and compares them to the S&P 500.  
+This vignette show stock prices for publicly-traded life insurance companies for the past x days.  
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -29,25 +29,160 @@ In addition, I used the following packages to process the data and perform other
 library(httr)
 library(jsonlite)
 library(tidyverse)
+library(ggplot2)
+library(plyr)
+library(scales)
 
-# Stocks  aggregate (bars) ticker 
+# One ticker price/transaction info for several days 
+
 
 base<-'https://api.polygon.io/v2/aggs/ticker/'
-ticker<-'AAPL'
+ticker<-'GOOG'
 range<-'/range/1/day/'
-dates<-'2023-01-09/2023-01-09'
+dates<-'2023-01-01/2023-05-01'
 adjusted<-'?adjusted=true&sort=asc&limit=120'
 info_key<-'&apiKey=7FTp6uzAjKcWUI1BJEO7WppG3wyOZOy9'
+API_URL<-paste0(base,ticker, range, dates, adjusted, info_key)
+aggr_ticker_info<-GET(API_URL)
+df_ticker_aggr<-fromJSON(rawToChar(aggr_ticker_info$content))
 
-# Stocks grouped daily
+df_aggr_ticker_results<-df_ticker_aggr$results%>%
+  mutate(date=as.POSIXct(t/1000, origin="1970-01-01"), ticker=df_ticker_aggr$ticker)%>%
+  rename(volume=v, weighted_price=vw, open_price=o, close_price=c, high_price=h, low_price=l, num_transactions=n)%>%
+  select(-t)%>%
+  relocate(ticker)
 
 
-#foreign exchange aggregate bars
+# All equity securities (stock, ETFs) prices/transactions for one day (exluding QQ)
 
-https://api.polygon.io/v2/aggs/ticker/C:EURUSD/range/1/day/2023-01-09/2023-05-09?adjusted=true&sort=asc&limit=5000&apiKey=7FTp6uzAjKcWUI1BJEO7WppG3wyOZOy9
+date<-'2023-03-20'
+base<-'https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/'
+adjusted<-'?adjusted=true'
+info_key<-'&apiKey=7FTp6uzAjKcWUI1BJEO7WppG3wyOZOy9'
+API_URL<-paste0(base,date, adjusted, info_key)
+daily_stock_info<-GET(API_URL)
+df_daily_stock<-fromJSON(rawToChar(daily_stock_info$content))
 
 
-#foreign exchange grouped daily
+#Format date/time of selected date (which is originally the number of seconds from 1/1/1970). 
+
+
+df_daily_stock_results<-df_daily_stock$results%>%
+  mutate(date=as.POSIXct(t/1000, origin="1970-01-01"))%>%dplyr::rename(ticker=T, volume=v, weighted_price=vw, open_price=o, close_price=c, high_price=h, low_price=l, num_transactions=n)%>%
+  select(-t)
+
+df_daily_stock_results
+
+
+#Pick the top 10 tickers most heavily traded by volume
+#Also create a variable for the change in price for the day.
+
+top_10<-df_daily_stock_results%>%
+  arrange(desc(volume))%>%
+  slice(seq(10))%>%
+  mutate(price_change=close_price/open_price-1, Gain=if_else(price_change>0,1,0))
+
+f<-paste0("Change in Price for top-10 stocks traded on ",date)  # This is the title for the graph that follows
+
+ggplot(data=top_10, aes(x=ticker, y=price_change, fill=Gain))+geom_bar(stat="identity",show.legend = FALSE)+labs(title=f, y="Price Increase")
+
+
+
+#PROVIDE TICKER AND OBTAIN DETAILS OF THE  COMPANY
+
+
+#Function to obtain company information
+
+#create vector with top 10 ticker names
+top_10_tickers<-top_10$ticker
+
+# Function to get name of company, number of employees, outstanding shares for the top 10 tickers:
+
+get_company_info<-function(xyz){
+  #generate URL for the API for 1 ticker
+  ticker<-xyz
+  base<-'https://api.polygon.io/v3/reference/tickers/'
+  info_key<-'?apiKey=7FTp6uzAjKcWUI1BJEO7WppG3wyOZOy9'
+  API_URL<-paste0(base,ticker,info_key)
+  #connect to API
+  ticker_info<-GET(API_URL)
+  #Convert retrieved information (JSON format) to an R list 
+  df_ticker<-fromJSON(rawToChar(ticker_info$content))
+
+  #Form a vector from the various dispersed variables for the 1 ticker 
+df_tick_result<-cbind(
+  ticker=df_ticker$results$ticker_root,
+  company=df_ticker$results$name,
+  outstanding=df_ticker$results$share_class_shares_outstanding,
+  employees=df_ticker$results$total_employees)
+return(df_tick_result)
+}
+
+
+#Initialize dataframe that will store information for 10 companies 
+df_ticker_res<-data.frame(
+  ticker=character(),
+  company=character(), 
+  outstanding=integer(), 
+  employees=integer())
+
+
+#loop through the 10 tickers to invoke the function that obtains the company information for each
+
+for (i in 1:10){
+  oo<-data.frame(get_company_info(top_10_tickers[i]))
+  print(oo)
+  df_ticker_res<-plyr::rbind.fill(df_ticker_res, oo)
+}
+
+df_ticker_res
+
+
+
+
+
+
+
+
+cat(paste("Company name/Security: ",
+           df_ticker$results$name,'\n',
+           "Address: ",df_ticker$results$address$address1,
+          ",",df_ticker$results$address$city,
+          df_ticker$results$address$state, '\n',
+          "Number of employees:",
+          format(df_ticker$results$total_employees,big.mark=","),'\n',
+          "Outstanding shares:",
+          format(df_ticker$results$share_class_shares_outstanding,scientific=FALSE,big.mark=","),'\n' 
+          , sep=" ")
+    )
+
+
+ggplot(data=df_ticker_res, aes(outstanding, 
+
+#One foreign exchange rate for multiple dates
+
+base<-'https://api.polygon.io/v2/aggs/ticker/'
+currency<-'C:EURUSD/range/1/day/'
+dates<-'2023-01-09/2023-05-09'
+adjusted<-'?adjusted=true&sort=asc&limit=5000'
+info_key<-'&apiKey=7FTp6uzAjKcWUI1BJEO7WppG3wyOZOy9'
+API_URL<-paste0(base,currency, dates, adjusted, info_key)
+fx_aggr_info<-GET(API_URL)
+df_fx_aggr<-fromJSON(rawToChar(fx_aggr_info$content))
+
+
+#Function to remove "C:" from ticker
+remove_C<-function(x){gsub("C:","",x)}
+
+
+df_fx_aggr_results<-df_fx_aggr$results%>%
+  mutate(date=as.POSIXct(t/1000, origin="1970-01-01"), ticker=remove_C(df_fx_aggr$ticker))%>%
+  rename(volume=v, weighted_volum=vw, open_price=o, close_price=c, high_price=h, low_price=l, num_transactions=n)%>%
+  select(-t)%>%
+  relocate(ticker)
+
+
+#All foreign exchange rates for one  day
 
 date<-'2023-02-09?'
 base<-'https://api.polygon.io/v2/aggs/grouped/locale/global/market/fx/'
@@ -55,22 +190,13 @@ adjusted<-'adjusted=true'
 info_key<-'&apiKey=7FTp6uzAjKcWUI1BJEO7WppG3wyOZOy9'
 API_URL<-paste0(base,date,adjusted, info_key)
 fx_info<-GET(API_URL)
-df_fx<-fromJSON(rawToChar(fx_info$content))
+df_fx_daily<-fromJSON(rawToChar(fx_info$content))
 
 
-#stocks Get Details on company
-
-ticker<-'GOOG'
-base<-'https://api.polygon.io/v3/reference/tickers/'
-info_key<-'?apiKey=7FTp6uzAjKcWUI1BJEO7WppG3wyOZOy9'
-API_URL<-paste0(base,ticker, info_key)
-ticker_info<-GET(API_URL)
-df_ticker<-fromJSON(rawToChar(ticker_info$content))
-
-
-
-
-
+df_fx_daily_results<-df_fx_daily$results%>%
+  mutate(date=as.POSIXct(t/1000, origin="1970-01-01"), T=remove_C(T))%>%
+  rename(ticker=T, volume=v, weighted_volum=vw, open_price=o, close_price=c, high_price=h, low_price=l, num_transactions=n)%>%
+  select(-t)
 
 
 ```
