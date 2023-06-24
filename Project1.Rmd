@@ -27,31 +27,62 @@ In addition, I used the following packages to process the data and perform other
 ```{r}
 
 library(httr)
+library(plyr)
 library(jsonlite)
 library(tidyverse)
 library(ggplot2)
-library(plyr)
-library(scales)
-
-# One ticker price/transaction info for several days 
 
 
+
+#Price/transaction info for only One ticker for several days 
+
+
+get_daily_info<-function(tick, daterange){
 base<-'https://api.polygon.io/v2/aggs/ticker/'
-ticker<-'GOOG'
+ticker<-tick
 range<-'/range/1/day/'
-dates<-'2023-01-01/2023-05-01'
+dates<-daterange
 adjusted<-'?adjusted=true&sort=asc&limit=120'
 info_key<-'&apiKey=7FTp6uzAjKcWUI1BJEO7WppG3wyOZOy9'
 API_URL<-paste0(base,ticker, range, dates, adjusted, info_key)
 aggr_ticker_info<-GET(API_URL)
 df_ticker_aggr<-fromJSON(rawToChar(aggr_ticker_info$content))
 
-df_aggr_ticker_results<-df_ticker_aggr$results%>%
-  mutate(date=as.POSIXct(t/1000, origin="1970-01-01"), ticker=df_ticker_aggr$ticker)%>%
-  rename(volume=v, weighted_price=vw, open_price=o, close_price=c, high_price=h, low_price=l, num_transactions=n)%>%
-  select(-t)%>%
-  relocate(ticker)
+df_aggr_ticker_results<-as_tibble(df_ticker_aggr$results)%>%
+  dplyr::mutate(date=as.POSIXct(t/1000, origin="1970-01-01"), ticker=df_ticker_aggr$ticker)%>%
+  dplyr::rename(volume=v, weighted_price=vw, open_price=o, close_price=c, high_price=h, low_price=l, num_transactions=n)%>%
+  dplyr::select(-t)%>%
+  dplyr::relocate(ticker)
+print(df_aggr_ticker_results)
+return(list(df_aggr_ticker_results))
+}
 
+#Function to cycle through top 5 stocks and obtain the daily info
+
+daterange<-'2023-01-01/2023-05-01'
+df_daily<-data.frame(T=character(), 
+                     v=integer(),
+                     vw=double(),
+                     o=double(),
+                     c=double(),
+                     h=double(),
+                     l=double(),
+                     n=double(),
+                     t=double())
+
+
+for (i in 1:5){
+  oo<-data.frame(get_daily_info(top_5_tickers[i], daterange))
+  df_daily<-rbind.fill(df_daily, oo)
+}
+
+ggplot(df_daily, aes(y=weighted_price, x=ticker))+geom_boxplot()
+
+
+df_daily_summary<-df_daily%>%dplyr::group_by(ticker)%>%dplyr::summarise(mean_price=mean(weighted_price),sd_price=sd(weighted_price))
+
+sd(daily_info$weighted_price)
+mean(daily_info$weighted_price)
 
 # All equity securities (stock, ETFs) prices/transactions for one day (exluding QQ)
 
@@ -74,17 +105,18 @@ df_daily_stock_results<-df_daily_stock$results%>%
 df_daily_stock_results
 
 
-#Pick the top 10 tickers most heavily traded by volume
+#Pick the top 5 tickers most heavily traded by volume
 #Also create a variable for the change in price for the day.
 
-top_10<-df_daily_stock_results%>%
-  arrange(desc(volume))%>%
-  slice(seq(10))%>%
-  mutate(price_change=close_price/open_price-1, Gain=if_else(price_change>0,1,0))
+top_5<-df_daily_stock_results%>%
+  mutate(price_change=close_price/open_price-1, Gain=if_else(price_change>0,1,0))%>%
+  arrange(desc(price_change))%>%
+  slice(seq(5))
+  
 
-f<-paste0("Change in Price for top-10 stocks traded on ",date)  # This is the title for the graph that follows
+f<-paste0("Change in Price for top-5 stocks traded on ",date)  # This is the title for the graph that follows
 
-ggplot(data=top_10, aes(x=ticker, y=price_change, fill=Gain))+geom_bar(stat="identity",show.legend = FALSE)+labs(title=f, y="Price Increase")
+ggplot(data=top_5, aes(x=ticker, y=price_change, fill=Gain))+geom_bar(stat="identity",show.legend = FALSE)+labs(title=f, y="Price Increase")
 
 
 
@@ -93,10 +125,10 @@ ggplot(data=top_10, aes(x=ticker, y=price_change, fill=Gain))+geom_bar(stat="ide
 
 #Function to obtain company information
 
-#create vector with top 10 ticker names
-top_10_tickers<-top_10$ticker
+#create vector with top 5 ticker names
+top_5_tickers<-top_5$ticker
 
-# Function to get name of company, number of employees, outstanding shares for the top 10 tickers:
+# Function to get name of company, number of employees, outstanding shares for the top 5 tickers:
 
 get_company_info<-function(xyz){
   #generate URL for the API for 1 ticker
@@ -127,11 +159,10 @@ df_ticker_res<-data.frame(
   employees=integer())
 
 
-#loop through the 10 tickers to invoke the function that obtains the company information for each
+#loop through the 5 tickers to invoke the function that obtains the company information for each
 
-for (i in 1:10){
-  oo<-data.frame(get_company_info(top_10_tickers[i]))
-  print(oo)
+for (i in 1:5){
+  oo<-data.frame(get_company_info(top_5_tickers[i]))
   df_ticker_res<-plyr::rbind.fill(df_ticker_res, oo)
 }
 
