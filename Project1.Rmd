@@ -27,66 +27,16 @@ In addition, I used the following packages to process the data and perform other
 ```{r}
 
 library(httr)
-library(plyr)
 library(jsonlite)
 library(tidyverse)
 library(ggplot2)
+library(knitr)
 
 
 
-#Price/transaction info for only One ticker for several days 
+# Function to retrieve prices and transactions for all equity securities (e.g., stocks, ETFs, warrants, etc.) for one day from the Polygon API. 
 
-
-get_daily_info<-function(tick, daterange){
-base<-'https://api.polygon.io/v2/aggs/ticker/'
-ticker<-tick
-range<-'/range/1/day/'
-dates<-daterange
-adjusted<-'?adjusted=true&sort=asc&limit=120'
-info_key<-'&apiKey=7FTp6uzAjKcWUI1BJEO7WppG3wyOZOy9'
-API_URL<-paste0(base,ticker, range, dates, adjusted, info_key)
-aggr_ticker_info<-GET(API_URL)
-df_ticker_aggr<-fromJSON(rawToChar(aggr_ticker_info$content))
-
-df_aggr_ticker_results<-as_tibble(df_ticker_aggr$results)%>%
-  dplyr::mutate(date=as.POSIXct(t/1000, origin="1970-01-01"), ticker=df_ticker_aggr$ticker)%>%
-  dplyr::rename(volume=v, weighted_price=vw, open_price=o, close_price=c, high_price=h, low_price=l, num_transactions=n)%>%
-  dplyr::select(-t)%>%
-  dplyr::relocate(ticker)
-print(df_aggr_ticker_results)
-return(list(df_aggr_ticker_results))
-}
-
-#Function to cycle through top 5 stocks and obtain the daily info
-
-daterange<-'2023-01-01/2023-05-01'
-df_daily<-data.frame(T=character(), 
-                     v=integer(),
-                     vw=double(),
-                     o=double(),
-                     c=double(),
-                     h=double(),
-                     l=double(),
-                     n=double(),
-                     t=double())
-
-
-for (i in 1:5){
-  oo<-data.frame(get_daily_info(top_5_tickers[i], daterange))
-  df_daily<-rbind.fill(df_daily, oo)
-}
-
-ggplot(df_daily, aes(y=weighted_price, x=ticker))+geom_boxplot()
-
-
-df_daily_summary<-df_daily%>%dplyr::group_by(ticker)%>%dplyr::summarise(mean_price=mean(weighted_price),sd_price=sd(weighted_price))
-
-sd(daily_info$weighted_price)
-mean(daily_info$weighted_price)
-
-# All equity securities (stock, ETFs) prices/transactions for one day (exluding QQ)
-
-date<-'2023-03-20'
+date<-'2023-05-19'
 base<-'https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/'
 adjusted<-'?adjusted=true'
 info_key<-'&apiKey=7FTp6uzAjKcWUI1BJEO7WppG3wyOZOy9'
@@ -94,36 +44,28 @@ API_URL<-paste0(base,date, adjusted, info_key)
 daily_stock_info<-GET(API_URL)
 df_daily_stock<-fromJSON(rawToChar(daily_stock_info$content))
 
-
-#Format date/time of selected date (which is originally the number of seconds from 1/1/1970). 
-
-
+#Re-format date/time of selected date (the format provided by the API is number of seconds since 1/1/1970) and relabel variables. 
 df_daily_stock_results<-df_daily_stock$results%>%
-  mutate(date=as.POSIXct(t/1000, origin="1970-01-01"))%>%dplyr::rename(ticker=T, volume=v, weighted_price=vw, open_price=o, close_price=c, high_price=h, low_price=l, num_transactions=n)%>%
+  dplyr::mutate(date=as.POSIXct(t/1000, origin="1970-01-01"))%>%
+  dplyr::rename(ticker=T, volume=v, weighted_price=vw, open_price=o, close_price=c, high_price=h, low_price=l, num_transactions=n)%>%
   select(-t)
 
-df_daily_stock_results
-
-
-#Pick the top 5 tickers most heavily traded by volume
+#Pick the top 5 tickers with highest number of transactions in the chosen date 
 #Also create a variable for the change in price for the day.
 
 top_5<-df_daily_stock_results%>%
   mutate(price_change=close_price/open_price-1, Gain=if_else(price_change>0,1,0))%>%
-  arrange(desc(price_change))%>%
+  arrange(desc(num_transactions))%>%
   slice(seq(5))
-  
 
-f<-paste0("Change in Price for top-5 stocks traded on ",date)  # This is the title for the graph that follows
-
+#Plot the daily price increase for each of the 5 stocks with highest number of transactions 
+f<-paste0("Publicly Traded Equities with Highest Number of Transactions on ",format(as.Date(date),format="%B %d, %Y"))  # This is the title for the graph that follows
 ggplot(data=top_5, aes(x=ticker, y=price_change, fill=Gain))+geom_bar(stat="identity",show.legend = FALSE)+labs(title=f, y="Price Increase")
 
+```
+```{r}
 
-
-#PROVIDE TICKER AND OBTAIN DETAILS OF THE  COMPANY
-
-
-#Function to obtain company information
+#OBTAIN NAME OF EQUITY AND OTHER DETAILS FOR A TICKER 
 
 #create vector with top 5 ticker names
 top_5_tickers<-top_5$ticker
@@ -146,49 +88,98 @@ df_tick_result<-cbind(
   ticker=df_ticker$results$ticker_root,
   company=df_ticker$results$name,
   outstanding=df_ticker$results$share_class_shares_outstanding,
-  employees=df_ticker$results$total_employees)
+  employees=as.numeric(df_ticker$results$total_employees))
 return(df_tick_result)
 }
 
 
-#Initialize dataframe that will store information for 10 companies 
-df_ticker_res<-data.frame(
-  ticker=character(),
-  company=character(), 
-  outstanding=integer(), 
-  employees=integer())
+#outstanding=format(as.numeric(df_ticker$results$share_class_shares_outstanding),scientific=FALSE,big.mark=","),
+
+#Initialize dataframe that will store information for 5 companies 
+df_ticker_res<-data.frame()
 
 
-#loop through the 5 tickers to invoke the function that obtains the company information for each
+#loop through the 5 tickers to invoke the function that obtains the company information for each ticker
 
 for (i in 1:5){
   oo<-data.frame(get_company_info(top_5_tickers[i]))
-  df_ticker_res<-plyr::rbind.fill(df_ticker_res, oo)
+  df_ticker_res<-dplyr::bind_rows(df_ticker_res, oo)
+  #df_ticker_res<-plyr::rbind.fill(df_ticker_res, oo)
 }
 
-df_ticker_res
+
+knitr::kable(df_ticker_res, col.names = c("ticker","equity","outstanding shares","number of employees"), caption=paste0("The Top 5 Gainers for ",format(as.Date(date),format="%B %d, %Y")))
+
+
+##MERGE the financial information with company information
+top_5_all<-left_join(top_5,df_ticker_res, by="ticker")%>%mutate(market_cap=as.numeric(outstanding)*weighted_price/1000000000)
+#replace employees=NULL with 0s
+top_5_all$employees[is.na(top_5_all$employees)] <- 0
+ggplot(data=top_5_all, aes(x=market_cap, y=as.numeric(employees), label=ticker))+geom_text()
+
+```
 
 
 
 
 
+```{r}
+
+#HISTORICAL INFO FOR EACH EQUITY
+#Function to obtain prices and transactions for one ticker for a period of several days from the Polygon API
+
+daterange<-'2023-01-01/2023-05-01'
+
+df_daily<-data.frame(v=integer(),
+                     vw=double(),
+                     o=double(),
+                     c=double(),
+                     h=double(),
+                     l=double(),
+                     n=double(),
+                     t=double())
+
+get_daily_info<-function(tick, daterange){
+base<-'https://api.polygon.io/v2/aggs/ticker/'
+ticker<-tick
+range<-'/range/1/day/'
+dates<-daterange
+adjusted<-'?adjusted=true&sort=asc&limit=120'
+info_key<-'&apiKey=7FTp6uzAjKcWUI1BJEO7WppG3wyOZOy9'
+API_URL<-paste0(base,ticker, range, dates, adjusted, info_key)
+aggr_ticker_info<-GET(API_URL)
+df_ticker_aggr<-fromJSON(rawToChar(aggr_ticker_info$content))
+
+df_aggr_ticker_results<-as_tibble(df_ticker_aggr$results)%>%mutate(ticker=df_ticker_aggr$ticker)
+return(list(df_aggr_ticker_results))
+}
+
+#Invoke function to  obtain the daily info for each of the 5 top equities
+
+for (i in 1:5){
+  oo<-data.frame(get_daily_info(top_5_tickers[i], daterange))
+  df_daily<-dplyr::bind_rows(df_daily, oo)
+}
+
+df_daily<-df_daily%>%
+  dplyr::mutate(date=as.POSIXct(t/1000, origin="1970-01-01"))%>%
+  dplyr::rename(volume=v, weighted_price=vw, open_price=o, close_price=c, high_price=h, low_price=l, num_transactions=n)%>%
+  dplyr::select(-t)%>%
+  dplyr::relocate(ticker)
 
 
 
-cat(paste("Company name/Security: ",
-           df_ticker$results$name,'\n',
-           "Address: ",df_ticker$results$address$address1,
-          ",",df_ticker$results$address$city,
-          df_ticker$results$address$state, '\n',
-          "Number of employees:",
-          format(df_ticker$results$total_employees,big.mark=","),'\n',
-          "Outstanding shares:",
-          format(df_ticker$results$share_class_shares_outstanding,scientific=FALSE,big.mark=","),'\n' 
-          , sep=" ")
-    )
+ggplot(df_daily, aes(y=weighted_price, x=ticker))+geom_boxplot()
+
+ggplot(df_daily, aes(x=date, y=close_price))+geom_point()+facet_grid(ticker~.)
+
+ggplot(df_daily, aes(x=log(weighted_price)))+geom_histogram(binwidth=0.1,aes(y=after_stat(density)))+geom_density(alpha=.2)+facet_grid(ticker ~ .)
 
 
-ggplot(data=df_ticker_res, aes(outstanding, 
+
+```
+
+
 
 #One foreign exchange rate for multiple dates
 
