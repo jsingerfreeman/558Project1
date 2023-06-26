@@ -237,10 +237,50 @@ The top 5 most traded equity securities on January 01, 2023 are:
 | SPY    | SPDR S&P 500 ETF Trust   |                      0.93 | 0                   |
 | TSLA   | Tesla, Inc. Common Stock |                      3.17 | 127,855             |
 
-![](Project1_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
+In the plot below, the number of employees is plotted against the market
+cap (calculated by multiplyhing the price by the shares outstanding).
+There does not seem to be a relationship between them However, this may
+be due to the small sample selected.
 
 ![](Project1_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
 
+Next we take a look at the gains/losses for the selected date (May 19,
+2023). Four of the top 5 traded equities experienced an intra-day loss.
+
 ![](Project1_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
 
+The graph below shows boxplots of the weighted prices for each equity
+security for the selected date range. There aren’t many outliers and 3
+of the distributions aer consistent with normality.
+
 ![](Project1_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+
+The line plot below shows the closing prices over the selected date
+range. They are all increasing, as shown by the positively sloped
+trendline.
+
+![](Project1_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
+
+I created a variable that is the ratio of the trading volume (number of
+shares transaced) to the number of transactions. I would have expected
+it to be relatively constant, but it appears to fluctuate from day to
+day and there is a decreasing trend over period under consideration.
+
+![](Project1_files/figure-gfm/unnamed-chunk-11-1.png)<!-- -->
+
+Perhaps the ratio of trading volume to transactions is related to either
+prices or volume. The correlation matrix below shows that volume and
+number of transactions are highly correlated over all equities,but the
+prior plot suggests that this is not necessarily the case on an
+individual equity basis.
+
+|                  | volume | weighted_price | open_price | close_price | high_price | low_price | num_transactions | vol_trans_ratio |
+|:-----------------|-------:|---------------:|-----------:|------------:|-----------:|----------:|-----------------:|----------------:|
+| volume           |  1.000 |         -0.145 |     -0.146 |      -0.145 |     -0.138 |    -0.154 |            0.961 |           0.201 |
+| weighted_price   | -0.145 |          1.000 |      1.000 |       1.000 |      1.000 |     1.000 |           -0.264 |           0.497 |
+| open_price       | -0.146 |          1.000 |      1.000 |       0.999 |      1.000 |     1.000 |           -0.264 |           0.496 |
+| close_price      | -0.145 |          1.000 |      0.999 |       1.000 |      1.000 |     0.999 |           -0.265 |           0.499 |
+| high_price       | -0.138 |          1.000 |      1.000 |       1.000 |      1.000 |     0.999 |           -0.255 |           0.493 |
+| low_price        | -0.154 |          1.000 |      1.000 |       0.999 |      0.999 |     1.000 |           -0.273 |           0.501 |
+| num_transactions |  0.961 |         -0.264 |     -0.264 |      -0.265 |     -0.255 |    -0.273 |            1.000 |          -0.049 |
+| vol_trans_ratio  |  0.201 |          0.497 |      0.496 |       0.499 |      0.493 |     0.501 |           -0.049 |           1.000 |

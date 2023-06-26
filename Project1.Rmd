@@ -263,12 +263,18 @@ The top 5 most traded equity securities on `r format(as.Date(t[1]),format="%B %d
 df_ticker_res<-top_5_all%>%dplyr::select(ticker, company, outstanding, employees)%>%mutate(outstanding=round(as.numeric(outstanding)/1000000000,2), employees=prettyNum(employees, big.mark=",", scientific=FALSE))%>%arrange(ticker)
 
 knitr::kable(df_ticker_res, col.names = c("ticker","issuer/equity","outstanding shares ($bn)","number of employees"))
+```
 
+In the plot below, the number of employees is plotted against the market cap (calculated by multiplyhing the price by the shares outstanding).  There does not seem to be a relationship between them   However, this may be due to the small sample selected.  
+
+```{r echo=FALSE}
 f<-paste0("top traded equities on ",format(as.Date(date),format="%B %d, %Y"))  # This is the title for the graph that follows
 
 ggplot(data=top_5_all, aes(x=market_cap, y=as.numeric(employees), label=ticker))+geom_point()+geom_text(hjust = -0.1, nudge_x = 0.05)+labs(title=paste0("Market Cap v. Number of Employees for ",f), y="employees", x="market capitalization ($bn)")+scale_x_continuous(label=comma)+scale_y_continuous(label=comma)  
 
 ```
+
+Next we take a look at the gains/losses for the selected date (May 19, 2023).  Four of the top 5 traded equities experienced an intra-day loss. 
 
 ```{r echo=FALSE}
 #Plot the daily price increase for each of the 5 stocks with highest number of transactions 
@@ -278,16 +284,33 @@ ggplot(data=top_5_all, aes(x=ticker, y=price_change, fill=Gain))+geom_bar(stat="
 
 ```
 
+The graph below shows boxplots of the weighted prices for each equity security for the selected date range.  There aren't many outliers and 3 of the distributions aer consistent with normality.
+
 ```{r echo=FALSE}
 
-ggplot(df_daily, aes(y=weighted_price))+geom_boxplot()+labs(title=paste0("Weighted Prices for ", format(as.Date(date),format="%B %d, %Y",y="weighted price")))+facet_wrap(ticker~.)
+ggplot(df_daily, aes(y=weighted_price))+geom_boxplot()+labs(title=paste0("Weighted Prices for ",first_date,"-",second_date))+facet_wrap(ticker~.)
 
 
 ```
 
+The line plot below shows the closing prices over the selected date range.  They are all increasing, as shown by the positively sloped trendline.   
+
 ```{r echo=FALSE}
-ggplot(df_daily, aes(x=date, y=close_price))+geom_line()+facet_wrap(ticker~.)+labs(y="close price", title=paste0("Close prices for ",first_date," through ", second_date))
+ggplot(df_daily, aes(x=date, y=close_price))+geom_line()+facet_wrap(ticker~.)+labs(y="close price", title=paste0("Close prices for ",first_date," through ", second_date))+geom_smooth(method=lm)
 ```
 
+I created a variable that is the ratio of the trading volume (number of shares transaced) to the number of transactions.  I would have expected it to be relatively constant, but it appears to fluctuate from day to day and there is a decreasing trend over period under consideration.  
 
+```{r echo=FALSE}
+ggplot(df_daily)+geom_line(aes(x=date,y=volume/num_transactions), color="darkred")+
+  facet_wrap(ticker~.)+labs(title=paste0("Volume-transaction ratio for ",first_date," through ", second_date))
+
+```
+
+Perhaps the ratio of trading volume to transactions is related to either prices or volume.  The correlation matrix below shows that volume and number of transactions are highly correlated over all equities,but the prior plot suggests that this is not necessarily the case on an individual equity  basis.   
+
+```{r echo=FALSE}
+correl_mat<-df_daily%>%select_if(is.numeric)%>%mutate(vol_trans_ratio=volume/num_transactions)%>%cor()
+kable(correl_mat, digits=3)
+```
 
